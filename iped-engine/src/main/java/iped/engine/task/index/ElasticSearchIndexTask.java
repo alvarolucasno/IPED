@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import iped.configuration.Configurable;
 import iped.data.IItem;
 import iped.engine.CmdLineArgs;
+import iped.engine.config.AbstractTaskConfig;
 import iped.engine.config.ConfigurationManager;
 import iped.engine.config.ElasticSearchTaskConfig;
 import iped.engine.config.IndexTaskConfig;
@@ -68,6 +69,7 @@ import iped.io.ISeekableInputStreamFactory;
 import iped.properties.BasicProps;
 import iped.properties.ExtraProperties;
 import iped.utils.IOUtil;
+import iped.utils.UTF8Properties;
 
 public class ElasticSearchIndexTask extends AbstractTask {
 
@@ -87,11 +89,16 @@ public class ElasticSearchIndexTask extends AbstractTask {
     public static final String PREVIEW_IN_DATASOURCE = "previewInDataSource";
     public static final String KEY_VAL_SEPARATOR = ":";
 
-    public static final int FACE_SIZE = 128;
+    /** Face embedding sizes of the models supported by FaceRecognitionTask.py */
+    public static final int FACE_SIZE_DLIB = 128;
+    public static final int FACE_SIZE_ARCFACE = 512;
+    private static final String FACE_CONFIG_FILE = "FaceRecognitionConfig.txt";
+    private static final String FACE_MODEL_PROP = "faceRecognitionModel";
 
     private static boolean isEnabled = false;
 
     private ElasticSearchTaskConfig elasticConfig;
+    private ConfigurationManager configurationManager;
 
     private static RestHighLevelClient client;
 
@@ -128,6 +135,7 @@ public class ElasticSearchIndexTask extends AbstractTask {
     public void init(ConfigurationManager configurationManager) throws Exception {
 
         taskInstances.add(this);
+        this.configurationManager = configurationManager;
         elasticConfig = configurationManager.findObject(ElasticSearchTaskConfig.class);
 
         retries = elasticConfig.getRetries();
@@ -261,6 +269,22 @@ public class ElasticSearchIndexTask extends AbstractTask {
         }
     }
 
+    /**
+     * True if FaceRecognitionTask.py is configured with the legacy dlib model
+     * (128-d, euclidean). Any other value (default buffalo_l) means ArcFace 512-d
+     * vectors compared by cosine similarity.
+     */
+    private boolean isDlibFaceModel() {
+        AbstractTaskConfig<?> faceConfig = configurationManager.getTaskConfigurable(FACE_CONFIG_FILE);
+        if (faceConfig != null && faceConfig.getConfiguration() instanceof UTF8Properties) {
+            String model = ((UTF8Properties) faceConfig.getConfiguration()).getProperty(FACE_MODEL_PROP);
+            if (model != null && model.trim().equalsIgnoreCase("dlib")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private String getLatinExtendedBPattern() {
         StringBuilder sb = new StringBuilder();
         sb.append('[');
@@ -284,10 +308,12 @@ public class ElasticSearchIndexTask extends AbstractTask {
                 Map.of("type", "knn_vector", "dimension", ImageSimilarity.numFeatures, "method",
                         Map.of("name", "hnsw", "space_type", "l2", "engine", "nmslib")));
 
-        // mapping faces as nested field
+        // mapping faces as nested field: dimension and metric depend on the face recognition model
+        boolean dlibFaces = isDlibFaceModel();
         var faces_mapping = new HashMap<String, Object>();
-        faces_mapping.put("face_encoding", Map.of("type", "knn_vector", "dimension", FACE_SIZE, "method",
-                Map.of("name", "hnsw", "space_type", "l2", "engine", "nmslib")));
+        faces_mapping.put("face_encoding",
+                Map.of("type", "knn_vector", "dimension", dlibFaces ? FACE_SIZE_DLIB : FACE_SIZE_ARCFACE, "method",
+                        Map.of("name", "hnsw", "space_type", dlibFaces ? "l2" : "cosinesimil", "engine", "nmslib")));
         faces_mapping.put("face_location", Collections.singletonMap("type", "short"));
         properties.put("faces", Map.of("type", "nested", "properties", faces_mapping));
 

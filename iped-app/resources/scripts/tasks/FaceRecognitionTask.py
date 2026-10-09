@@ -53,6 +53,10 @@ min_face_size = 0
 
 # processes sharing one GPU: each loads its own copy of the models
 defaultGpuProcesses = 2
+# set in init(): True if onnxruntime has a GPU provider (CUDA or DirectML) available
+gpuAvailable = False
+# the model (and fallback to dlib) is resolved once, by the first worker
+modelResolved = False
 
 firstInstance = True
 processQueue = None
@@ -67,7 +71,7 @@ def createProcessQueue():
     global processQueue, maxProcesses
     if processQueue is None:
         if maxProcesses is None:
-            if recognition_model != 'dlib' and device != 'cpu':
+            if recognition_model != 'dlib' and device != 'cpu' and gpuAvailable:
                 maxProcesses = defaultGpuProcesses
             else:
                 maxProcesses = int(max(1, numThreads / 2))
@@ -90,6 +94,10 @@ def findModelDir(configured):
         if os.path.isfile(os.path.join(c, 'det_10g.onnx')) and os.path.isfile(os.path.join(c, 'w600k_r50.onnx')):
             return c
     return None
+
+def dlibInstalled():
+    import importlib.util
+    return importlib.util.find_spec('face_recognition') is not None and importlib.util.find_spec('cv2') is not None
 
 def log_stderr(proc):
     for line in iter(proc.stderr.readline, b''):
@@ -161,10 +169,37 @@ class FaceRecognitionTask:
             msg_see_manual = 'See FaceRecognition task setup information at <https://github.com/sepinf-inc/IPED/wiki/User-Manual#facerecognition>.'
             msg_task_init_error = 'FaceRecognition task could not be initialized and was disabled'
 
-            global recognition_model
-            model = taskConfig.getConfiguration().getProperty(faceRecognitionModelProp)
-            if model is not None and model.strip():
-                recognition_model = model.strip().lower()
+            global recognition_model, model_dir, device, gpuAvailable, modelResolved
+            props = taskConfig.getConfiguration()
+            if not modelResolved:
+                modelResolved = True
+                model = props.getProperty(faceRecognitionModelProp)
+                if model is not None and model.strip():
+                    recognition_model = model.strip().lower()
+                value = props.getProperty(faceRecognitionDeviceProp)
+                if value is not None and value.strip():
+                    device = value.strip().lower()
+
+                if recognition_model == 'buffalo_l':
+                    configured = props.getProperty(faceModelDirProp)
+                    found = findModelDir(configured.strip() if configured is not None else None)
+                    if found is None:
+                        where = ('faceModelDir, ' + os.path.join(ipedRoot, 'models', 'insightface', recognition_model)
+                                 + ' or ~/.insightface/models/' + recognition_model)
+                        if dlibInstalled():
+                            # upgraded installations keep working with the model they already have
+                            logger.warn('[FaceRecognitionTask] InsightFace buffalo_l model files (det_10g.onnx, w600k_r50.onnx) not found in '
+                                        + where + ': falling back to the dlib model. Faces of this case will only be comparable '
+                                        + 'with other dlib cases. See conf/FaceRecognitionConfig.txt.')
+                            recognition_model = 'dlib'
+                        else:
+                            logger.error(msg_task_init_error + ': InsightFace buffalo_l model files (det_10g.onnx, w600k_r50.onnx) '
+                                         + 'not found in ' + where + '. See conf/FaceRecognitionConfig.txt.')
+                            FaceRecognitionTask.enabled = False
+                            return
+                    else:
+                        model_dir = found
+                        logger.info('[FaceRecognitionTask] Using InsightFace ' + recognition_model + ' models from ' + model_dir)
 
             if recognition_model == 'dlib':
                 # chek if 'face_recognition' module is installed
@@ -179,6 +214,12 @@ class FaceRecognitionTask:
                 import onnxruntime
                 module_name = 'pillow'
                 import PIL
+                # the external process falls back to CPU silently if no GPU provider is available:
+                # decide the number of processes from the providers actually present
+                providers = onnxruntime.get_available_providers()
+                gpuAvailable = any(p in providers for p in ('CUDAExecutionProvider', 'DmlExecutionProvider'))
+                if device != 'cpu' and not gpuAvailable:
+                    logger.info('[FaceRecognitionTask] onnxruntime has no GPU provider (' + str(providers) + '), running buffalo_l on CPU')
             else:
                 logger.error(msg_task_init_error + f': unknown faceRecognitionModel \'{recognition_model}\' (use buffalo_l or dlib).')
                 FaceRecognitionTask.enabled = False
@@ -249,28 +290,13 @@ class FaceRecognitionTask:
         if minSize is not None:
             min_size = int(minSize)
 
-        global model_dir, device, det_threshold, min_face_size
-        value = extraProps.getProperty(faceRecognitionDeviceProp)
-        if value is not None and value.strip():
-            device = value.strip().lower()
+        global det_threshold, min_face_size
         value = extraProps.getProperty(faceDetectionThresholdProp)
         if value is not None and value.strip():
             det_threshold = float(value)
         value = extraProps.getProperty(minFaceSizeProp)
         if value is not None and value.strip():
             min_face_size = int(value)
-        if recognition_model != 'dlib':
-            configured = extraProps.getProperty(faceModelDirProp)
-            found = findModelDir(configured.strip() if configured is not None else None)
-            if found is None:
-                logger.error('FaceRecognition task could not be initialized and was disabled: InsightFace ' + recognition_model
-                             + ' model files (det_10g.onnx, w600k_r50.onnx) not found in faceModelDir, '
-                             + os.path.join(ipedRoot, 'models', 'insightface', recognition_model) + ' or ~/.insightface/models/'
-                             + recognition_model + '. See conf/FaceRecognitionConfig.txt.')
-                FaceRecognitionTask.enabled = False
-                return
-            model_dir = found
-            logger.info('[FaceRecognitionTask] Using InsightFace ' + recognition_model + ' models from ' + model_dir)
 
         createProcessQueue()
         return

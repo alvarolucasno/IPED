@@ -28,6 +28,11 @@ MODEL_DIR = os.environ.get('IPED_FACE_MODEL_DIR',
                            os.path.join(os.path.expanduser('~'), '.insightface', 'models', 'buffalo_l'))
 FACES = os.environ.get('IPED_FACE_TESTDATA', '')
 HAS_MODEL = os.path.isfile(os.path.join(MODEL_DIR, 'w600k_r50.onnx'))
+try:
+    import onnxruntime  # noqa: F401
+    HAS_ONNXRUNTIME = True
+except ImportError:
+    HAS_ONNXRUNTIME = False
 
 
 def skip(reason):
@@ -65,9 +70,15 @@ def test_rotate_and_rgb_helpers_kept_for_age_estimation():
     assert fp.convertToRGB(p).mode == 'RGB'
 
 
-def _backend():
+def _require_model():
+    if not HAS_ONNXRUNTIME:
+        skip('onnxruntime not installed in this python')
     if not HAS_MODEL:
         skip('buffalo_l model not found in ' + MODEL_DIR)
+
+
+def _backend():
+    _require_model()
     return fp.InsightFaceBackend(MODEL_DIR)
 
 
@@ -99,8 +110,7 @@ def test_same_person_is_more_similar_than_different_people():
 
 
 def test_external_process_protocol(tmp_path=None):
-    if not HAS_MODEL:
-        skip('buffalo_l model not found')
+    _require_model()
     import tempfile
     folder = str(tmp_path) if tmp_path else tempfile.mkdtemp()
     blank = os.path.join(folder, 'blank.png')

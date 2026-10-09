@@ -14,6 +14,8 @@
 #  - dlib: Face Recognition Project (https://pypi.org/project/face-recognition/), 128-d embeddings compared by
 #    euclidean distance. Needs face_recognition and opencv-python modules.
 # Cases processed with one model can only be searched with faces of the same model.
+# If buffalo_l is set but its model files are not found, the task falls back to dlib when the
+# face_recognition module is installed (a warning is logged), otherwise it is disabled.
 faceRecognitionModel = buffalo_l
 
 # Folder with buffalo_l model files (absolute or relative to IPED folder). If not set, they are looked for in
