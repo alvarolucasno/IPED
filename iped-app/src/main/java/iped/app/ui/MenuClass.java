@@ -49,7 +49,7 @@ public class MenuClass extends JPopupMenu {
             checkHighlightedAndSubItems, uncheckHighlightedAndSubItems, checkHighlightedAndParent, uncheckHighlightedAndParent, checkHighlightedAndReferences, uncheckHighlightedAndReferences, checkHighlightedAndReferencedBy, uncheckHighlightedAndReferencedBy,
             changeGalleryColCount, defaultLayout, changeLayout, previewScreenshot, manageBookmarks, clearSearchHistory, importKeywords, navigateToParent, exportTerms, manageFilters, manageColumns, exportCheckedToZip, exportCheckedTreeToZip,
             exportTree, exportTreeChecked, similarDocs, openViewfile, createReport, resetColLayout, lastColLayout, saveColLayout, addToGraph, navigateToParentChat, pinFirstColumns, similarImagesCurrent, similarImagesExternal,
-            similarFacesCurrent, similarFacesExternal, toggleTimelineView, uiZoom, catIconSize, savePanelsLayout, loadPanelsLayout;
+            similarFacesCurrent, similarFacesExternal, semanticSearchText, semanticSearchCurrent, semanticSearchExternal, toggleTimelineView, uiZoom, catIconSize, savePanelsLayout, loadPanelsLayout;
 
     MenuListener menuListener = new MenuListener(this);
     boolean isTreeMenu;
@@ -317,6 +317,23 @@ public class MenuClass extends JPopupMenu {
         similarFacesExternal.addActionListener(menuListener);
         similarFacesExternal.setEnabled(submenu.isEnabled() && similarFacesExternalEnabled);
         submenu.add(similarFacesExternal);
+
+        submenu = new JMenu(Messages.getString("MenuClass.SemanticSearch")); //$NON-NLS-1$
+        submenu.setEnabled(SemanticSearchFilterActions.isAvailable());
+        this.add(submenu);
+
+        semanticSearchText = new JMenuItem(Messages.getString("MenuClass.SemanticSearch.Text")); //$NON-NLS-1$
+        semanticSearchText.addActionListener(menuListener);
+        submenu.add(semanticSearchText);
+
+        semanticSearchCurrent = new JMenuItem(Messages.getString("MenuClass.SemanticSearch.Current")); //$NON-NLS-1$
+        semanticSearchCurrent.addActionListener(menuListener);
+        semanticSearchCurrent.setEnabled(SemanticSearchFilterActions.canSearchSimilarTo(item));
+        submenu.add(semanticSearchCurrent);
+
+        semanticSearchExternal = new JMenuItem(Messages.getString("MenuClass.SemanticSearch.External")); //$NON-NLS-1$
+        semanticSearchExternal.addActionListener(menuListener);
+        submenu.add(semanticSearchExternal);
 
         this.addSeparator();
 

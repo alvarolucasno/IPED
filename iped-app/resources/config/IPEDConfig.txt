@@ -171,3 +171,9 @@ enableHTMLReport = true
 # It performs classification of image and video files.
 # Advanced settings can be modified in file "conf/RemoteImageClassifierConfig.txt"
 enableRemoteImageClassifier = false
+
+# Enables multimodal embeddings (EmbeddingGemma 2) of text, images, videos and audio,
+# allowing "Semantic search" by natural language or by a reference item in the analysis UI.
+# Requires the local embedding service, see scripts/embedding/README.md.
+# Advanced settings can be modified in file "conf/EmbeddingTaskConfig.txt"
+enableEmbedding = false

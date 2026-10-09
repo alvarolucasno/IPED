@@ -54,6 +54,7 @@ import iped.app.ui.controls.HintTextField;
 import iped.app.ui.controls.HoverButton;
 import iped.engine.search.MultiSearchResult;
 import iped.engine.search.QueryBuilder;
+import iped.engine.embedding.EmbeddingUtil;
 import iped.engine.search.SimilarFacesSearch;
 import iped.engine.task.NamedEntityTask;
 import iped.engine.task.index.IndexItem;
@@ -208,7 +209,7 @@ public class MetadataPanel extends JPanel implements ActionListener, ListSelecti
             fields = fields.stream().map(f -> LocalizedProperties.getLocalizedField(f)).collect(Collectors.toList());
             Collections.sort(fields, StringUtil.getIgnoreCaseComparator());
             for (String f : fields) {
-                if (f.equals(ResultTableModel.BOOKMARK_COL) || f.equals(ResultTableModel.SCORE_COL) || f.startsWith(ImageSimilarityTask.IMAGE_FEATURES) || f.startsWith(SimilarFacesSearch.FACE_FEATURES))
+                if (f.equals(ResultTableModel.BOOKMARK_COL) || f.equals(ResultTableModel.SCORE_COL) || f.startsWith(ImageSimilarityTask.IMAGE_FEATURES) || f.startsWith(SimilarFacesSearch.FACE_FEATURES) || f.equals(EmbeddingUtil.EMBEDDING))
                     continue;
                 if (filterStr.isEmpty() || f.toLowerCase().contains(filterStr))
                     props.addItem(f);

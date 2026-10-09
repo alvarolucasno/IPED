@@ -1,0 +1,18 @@
+# IPED embedding server (EmbeddingGemma 2). Python 3.12 recommended.
+# Install torch first from the CUDA index matching your driver, e.g.:
+#   pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.14.1 torchvision==0.29.1
+# (CPU only: pip install torch torchvision)
+sentence-transformers==6.1.0
+transformers==5.19.0
+fastapi==0.143.0
+uvicorn==0.54.0
+pillow==12.3.0
+numpy==2.5.3
+soundfile==0.14.0
+av==19.0.1
+librosa==1.0.0
+# 1.6.1 instead of newer: its DLLs are not blocked by Windows Smart App Control
+scikit-learn==1.6.1
+# tests
+pytest==9.1.1
+httpx==0.28.1

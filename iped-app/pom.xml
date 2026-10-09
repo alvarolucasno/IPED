@@ -842,6 +842,11 @@
                                 <resource>
                                     <filtering>false</filtering>
                                     <directory>${resources.dir}/scripts</directory>
+                                    <excludes>
+                                        <exclude>**/.venv/**</exclude>
+                                        <exclude>**/__pycache__/**</exclude>
+                                        <exclude>**/.pytest_cache/**</exclude>
+                                    </excludes>
                                 </resource>
                             </resources>
                         </configuration>

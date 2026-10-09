@@ -272,6 +272,9 @@ public class App extends JFrame implements WindowListener, IMultiSearchResultPro
     public List<? extends SortKey> similarImagesPrevSortKeys;
 
     public SimilarFacesFilterPanel similarFacesFilterPanel;
+    public SemanticSearchFilterPanel semanticSearchFilterPanel;
+    public SemanticSearchFilterer semanticSearchFilterer;
+    JButton semanticSearchButton;
     public IItem similarFacesRefItem;
     public List<? extends SortKey> similarFacesPrevSortKeys;
     SimilarDocumentFilterer similarDocumentFilterer;
@@ -552,6 +555,8 @@ public class App extends JFrame implements WindowListener, IMultiSearchResultPro
 
         similarFacesSearchFilterer = new SimilarFacesSearchFilterer();
 
+        semanticSearchFilterer = new SemanticSearchFilterer();
+
         filterDuplicates = new JCheckBox(Messages.getString("App.FilterDuplicates"));
         filterDuplicates.setToolTipText(Messages.getString("App.FilterDuplicatesTip"));
 
@@ -568,13 +573,22 @@ public class App extends JFrame implements WindowListener, IMultiSearchResultPro
         similarFacesFilterPanel = new SimilarFacesFilterPanel();
         similarFacesFilterPanel.setVisible(false);
 
+        semanticSearchFilterPanel = new SemanticSearchFilterPanel();
+        semanticSearchFilterPanel.setVisible(false);
+
+        semanticSearchButton = new JButton(Messages.getString("SemanticSearch.Button"));
+        semanticSearchButton.setToolTipText(Messages.getString("SemanticSearch.ButtonTip"));
+        semanticSearchButton.addActionListener(e -> SemanticSearchFilterActions.searchByText());
+
         topPanel.add(filterComboBox);
         topPanel.add(filterDuplicates);
         topPanel.add(clearAllFilters);
         topPanel.add(similarImageFilterPanel);
         topPanel.add(similarFacesFilterPanel);
+        topPanel.add(semanticSearchFilterPanel);
         topPanel.add(new JLabel(tab + Messages.getString("App.SearchLabel"))); //$NON-NLS-1$
         topPanel.add(queryComboBox);
+        topPanel.add(semanticSearchButton);
         topPanel.add(optionsButton);
         if (processingManager != null)
             topPanel.add(updateCaseData);
@@ -835,6 +849,7 @@ public class App extends JFrame implements WindowListener, IMultiSearchResultPro
         filterManager.addResultSetFilterer(duplicatesFilterer);
         filterManager.addResultSetFilterer(similarImagesFilterer);
         filterManager.addResultSetFilterer(similarFacesSearchFilterer);
+        filterManager.addResultSetFilterer(semanticSearchFilterer);
         filterManager.addResultSetFilterer(timelineListener);
         filterManager.addResultSetFilterer(TableHeaderFilterManager.get());
         filterManager.addResultSetFilterer(metadataPanel);

@@ -5,3 +5,7 @@ nbactions.xml
 /.project
 .pydevproject
 /.idea/
+# Python virtualenvs/caches of bundled scripts
+.venv/
+__pycache__/
+.pytest_cache/

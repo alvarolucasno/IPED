@@ -63,6 +63,7 @@ import iped.engine.data.Bookmarks;
 import iped.engine.data.DataSource;
 import iped.engine.data.IPEDSource;
 import iped.engine.data.Item;
+import iped.engine.embedding.EmbeddingUtil;
 import iped.engine.io.MetadataInputStreamFactory;
 import iped.engine.preview.PreviewConstants;
 import iped.engine.preview.PreviewRepositoryManager;
@@ -726,6 +727,12 @@ public class IPEDReader extends DataSourceReader {
                     featuresList.add(new KnnVector(convFloatToDoubleArray(featureFloats)));
                 }
                 evidence.setExtraAttribute(SimilarFacesSearch.FACE_FEATURES, featuresList);
+            }
+
+            // restore "embedding" to KnnVector, so it is indexed again in the report case
+            float[] embedding = EmbeddingUtil.getVector(evidence);
+            if (embedding != null) {
+                evidence.setExtraAttribute(EmbeddingUtil.EMBEDDING, EmbeddingUtil.toKnnVector(embedding));
             }
 
             Manager.getInstance().addItemToQueue(evidence);

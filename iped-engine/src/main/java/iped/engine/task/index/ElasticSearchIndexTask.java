@@ -54,6 +54,7 @@ import iped.engine.CmdLineArgs;
 import iped.engine.config.ConfigurationManager;
 import iped.engine.config.ElasticSearchTaskConfig;
 import iped.engine.config.IndexTaskConfig;
+import iped.engine.embedding.EmbeddingUtil;
 import iped.engine.io.FragmentingReader;
 import iped.engine.task.AbstractTask;
 import iped.engine.task.MinIOTask.MinIODataRef;
@@ -593,6 +594,11 @@ public class ElasticSearchIndexTask extends AbstractTask {
                 v[i] = vet[i];
             }
             extraAttributes.put(ImageSimilarityTask.IMAGE_FEATURES, v);
+        }
+
+        float[] embedding = EmbeddingUtil.toFloatArray(extraAttributes.get(EmbeddingUtil.EMBEDDING));
+        if (embedding != null) {
+            extraAttributes.put(EmbeddingUtil.EMBEDDING, embedding);
         }
 
         if (extraAttributes.containsKey(ExtraProperties.FACE_ENCODINGS) && extraAttributes.containsKey(ExtraProperties.FACE_LOCATIONS)) {

@@ -1,0 +1,61 @@
+########################################################################
+# Embedding Task configuration (multimodal semantic search)
+########################################################################
+# Generates one EmbeddingGemma 2 vector per item (text, image, video or audio)
+# in a single shared space, so the analysis UI can search all modalities with a
+# natural language query ("Semantic search") or find items similar to a
+# selected one. Enable it with "enableEmbedding = true" in IPEDConfig.txt.
+#
+# Vectors are computed by a local Python service that must be running during
+# processing and when using semantic search in the analysis UI:
+#   scripts\embedding\start_embedding_server.bat
+# See scripts/embedding/README.md for installation.
+
+# URL of the embedding service. Prefer loopback: item content is sent to it.
+serviceUrl = http://127.0.0.1:8691
+
+# Expected vector dimension (768 native, or 512/256/128 Matryoshka sizes).
+# Must match the service "--dim" option and must not change within a case.
+dimensions = 768
+
+# Modalities to embed.
+embedText = true
+embedImages = true
+embedVideos = true
+embedAudio = true
+
+# Items with less extracted text than this are not embedded as text.
+minTextChars = 30
+
+# Maximum extracted text characters sent per item (the service also truncates by tokens).
+maxTextChars = 20000
+
+# Images (and video frames) are resized so their largest side is at most this size.
+imageSize = 768
+
+# Maximum frames per video. Frames come from the video thumbnails (enableVideoThumbs);
+# if they are not available the raw video file is sent and sampled by the service.
+maxVideoFrames = 16
+
+# Raw video files larger than this (bytes) are not sent when no frames are available.
+maxRawVideoBytes = 209715200
+
+# Audio files larger than this (bytes) are not embedded (the service uses up to ~5 minutes of audio).
+maxAudioBytes = 67108864
+
+# Number of items per request to the service.
+batchSize = 16
+
+# Skip items with hits in the IPED hashes database (only if hashesDB is configured).
+skipHashDBFiles = false
+
+# Timeouts in milliseconds.
+connectTimeout = 30000
+socketTimeout = 600000
+
+# Analysis UI: semantic search keeps at most this many results per modality
+# (text, image, video, audio), so one modality does not crowd out the others.
+searchMaxResultsPerModality = 500
+
+# Analysis UI: minimum similarity (0-100, cosine x 100) to keep a semantic search result.
+searchMinScore = 0

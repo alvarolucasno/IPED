@@ -21,6 +21,7 @@ package iped.engine.config;
 import java.io.File;
 import java.io.IOException;
 import java.net.SocketPermission;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -234,6 +235,15 @@ public class Configuration {
                 host = host.substring(host.indexOf("://") + 3);
             }
             policy.addAllowedPermission(new SocketPermission(host, "connect,resolve"));
+        }
+        // semantic search embeds queries with the local embedding service
+        EmbeddingTaskConfig embeddingConfig = configManager.findObject(EmbeddingTaskConfig.class);
+        if (embeddingConfig != null) {
+            URI uri = URI.create(embeddingConfig.getServiceUrl());
+            if (uri.getHost() != null) {
+                String host = uri.getHost() + (uri.getPort() != -1 ? ":" + uri.getPort() : "");
+                policy.addAllowedPermission(new SocketPermission(host, "connect,resolve"));
+            }
         }
         Policy.setPolicy(policy);
         System.setSecurityManager(new SecurityManager());

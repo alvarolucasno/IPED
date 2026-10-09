@@ -409,6 +409,15 @@ public class MenuListener implements ActionListener {
         } else if (e.getSource() == menu.similarFacesExternal) {
             SimilarFacesFilterActions.searchSimilarFaces(true);
 
+        } else if (e.getSource() == menu.semanticSearchText) {
+            SemanticSearchFilterActions.searchByText();
+
+        } else if (e.getSource() == menu.semanticSearchCurrent) {
+            SemanticSearchFilterActions.searchSimilarToSelected();
+
+        } else if (e.getSource() == menu.semanticSearchExternal) {
+            SemanticSearchFilterActions.searchByExternalFile();
+
         } else if (e.getSource() == menu.similarDocs) {
             int selIdx = App.get().resultsTable.getSelectedRow();
             if (selIdx != -1) {
