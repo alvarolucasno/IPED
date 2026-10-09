@@ -2,6 +2,7 @@ package iped.engine.search;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import java.io.File;
@@ -18,6 +19,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import iped.data.IItem;
+import iped.data.IItemId;
 import iped.engine.data.IPEDMultiSource;
 import iped.engine.data.IPEDSource;
 import iped.engine.embedding.EmbeddingServiceClient;
@@ -56,9 +58,21 @@ public class SemanticSearchCaseTest {
         }
     }
 
+    /** Ranking only: no standout cut. */
     private static List<String> rank(float[] query, String modality, int k) throws IOException {
-        Set<String> modalities = modality == null ? null : Collections.singleton(modality);
-        MultiSearchResult result = new SemanticSearch(ipedCase, query, modalities, k, 0).search();
+        return search(new SemanticSearch(ipedCase, query, modality == null ? null : Collections.singleton(modality), k,
+                Float.NEGATIVE_INFINITY));
+    }
+
+    /** What the analyst sees with the default filter: only items that stand out. */
+    private static List<String> filter(String query) throws IOException {
+        System.out.println("[filter, min score " + SemanticSearch.DEFAULT_MIN_SCORE + "] " + query);
+        return search(new SemanticSearch(ipedCase, client.embedQuery(query), null, 500,
+                SemanticSearch.DEFAULT_MIN_SCORE));
+    }
+
+    private static List<String> search(SemanticSearch search) throws IOException {
+        MultiSearchResult result = search.search();
         List<String> names = new ArrayList<>();
         StringBuilder log = new StringBuilder();
         for (int i = 0; i < result.getLength(); i++) {
@@ -81,8 +95,9 @@ public class SemanticSearchCaseTest {
 
     @Test
     public void testEveryItemOfTheDatasetHasAnEmbedding() throws IOException {
-        MultiSearchResult all = new SemanticSearch(ipedCase, client.embedQuery("qualquer coisa"), null, 1000, -100)
-                .search();
+        MultiSearchResult all = new SemanticSearch(ipedCase, client.embedQuery("qualquer coisa"), null, 1000,
+                Float.NEGATIVE_INFINITY).search();
+        assertEquals(32, all.getLength());
         Set<String> names = new HashSet<>();
         for (int i = 0; i < all.getLength(); i++) {
             names.add(ipedCase.getItemByItemId(all.getItem(i)).getName());
@@ -143,14 +158,64 @@ public class SemanticSearchCaseTest {
         assertEquals(4, names.size());
     }
 
-    private static IItem findByName(String what, String name) throws IOException {
+    @Test
+    public void testFilterDropsModalitiesWithoutRelevantItems() throws IOException {
+        // no text, video or audio of the case is about dogs: only photos may pass the cut
+        for (String query : Arrays.asList("cachorro", "dog", "foto de um cachorro brincando")) {
+            List<String> names = filter(query);
+            for (String name : names) {
+                assertTrue(query + " -> " + name, name.endsWith(".jpg"));
+            }
+            assertTrue(query, names.size() <= 2);
+        }
+        assertEquals(Arrays.asList("IMG_0108.jpg"), filter("dog"));
+        assertEquals("IMG_0108.jpg", filter("foto de um cachorro brincando").get(0));
+        // nothing about sheet music in the case. Known borderline false positive: the
+        // ornate 1923 banknote engraving (IMG_0105) scores ~32, just above the cut.
+        for (String name : filter("partitura musical")) {
+            assertEquals("IMG_0105.jpg", name);
+        }
+    }
+
+    @Test
+    public void testFilterKeepsClearHits() throws IOException {
+        assertTrue(filter("recibo de pagamento do aluguel do apartamento").contains("comprovante_pagamento.txt"));
+        assertTrue(filter("bolo de aniversário com velas").contains("IMG_0106.jpg"));
+        assertTrue(filter("estádio de futebol lotado").contains("IMG_0110.jpg"));
+        assertTrue(filter("sirene").contains("gravacao_rua.wav"));
+        assertTrue(filter("receita de bolo").contains("audio_receita_04.mp3"));
+    }
+
+    @Test
+    public void testReferenceItemIsShownAsRef() throws IOException {
+        IItemId beachId = findIdByName("IMG_0103.jpg");
+        float[] vector = EmbeddingUtil.getVector(ipedCase.getItemByItemId(beachId));
+        System.out.println("[filter] similar to IMG_0103.jpg");
+        SemanticSearch search = new SemanticSearch(ipedCase, vector, null, 500, SemanticSearch.DEFAULT_MIN_SCORE)
+                .setReference(beachId);
+        MultiSearchResult result = search.search();
+        assertEquals(beachId, result.getItem(0));
+        assertEquals(SemanticSearch.REF_SCORE, result.getScore(0), 0);
+        List<String> names = search(search);
+        // the sea poem stands out among texts
+        assertTrue(names.contains("poema_mar.txt"));
+        // the beach video ranks first among videos, but with only two videos in the
+        // case the modality baseline is their midpoint, so it can not pass the cut
+        // (conservative by design: small modalities do not borrow other baselines)
+        assertEquals("VID_20250301_0201.mp4", rank(vector, EmbeddingUtil.MODALITY_VIDEO, 1).get(0));
+    }
+
+    private static IItemId findIdByName(String name) throws IOException {
         MultiSearchResult all = new IPEDSearcher(ipedCase, "*:*").multiSearch();
         for (int i = 0; i < all.getLength(); i++) {
-            IItem item = ipedCase.getItemByItemId(all.getItem(i));
-            if (name.equals(item.getName())) {
-                return item;
+            if (name.equals(ipedCase.getItemByItemId(all.getItem(i)).getName())) {
+                return all.getItem(i);
             }
         }
-        throw new AssertionError(what + " not found: " + name);
+        throw new AssertionError("not found: " + name);
+    }
+
+    private static IItem findByName(String what, String name) throws IOException {
+        return ipedCase.getItemByItemId(findIdByName(name));
     }
 }

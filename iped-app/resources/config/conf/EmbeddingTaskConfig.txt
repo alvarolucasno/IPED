@@ -57,5 +57,9 @@ socketTimeout = 600000
 # (text, image, video, audio), so one modality does not crowd out the others.
 searchMaxResultsPerModality = 500
 
-# Analysis UI: minimum similarity (0-100, cosine x 100) to keep a semantic search result.
-searchMinScore = 0
+# Analysis UI: minimum standout score (0-100) to keep a semantic search result.
+# Raw similarity is not meaningful by itself: unrelated items usually have cosine
+# 0.55-0.65 and that floor changes with the query. The score is how far an item
+# stands out from the typical item of its modality in the case, in robust
+# standard deviations x 10. 30 = 3 deviations; lower it for more recall.
+searchMinScore = 30

@@ -50,7 +50,7 @@ public class EmbeddingTaskConfig extends AbstractTaskPropertiesConfig {
     private int connectTimeout = 30 * 1000;
     private int socketTimeout = 10 * 60 * 1000;
     private int searchMaxResultsPerModality = 500;
-    private int searchMinScore = 0;
+    private int searchMinScore = 30;
 
     @Override
     public String getTaskEnableProperty() {

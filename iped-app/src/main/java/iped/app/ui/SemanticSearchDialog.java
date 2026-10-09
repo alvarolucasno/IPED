@@ -122,6 +122,7 @@ public class SemanticSearchDialog extends JDialog {
         form.add(new JLabel(Messages.getString("SemanticSearch.MinScore")), c);
         c.gridx = 1;
         form.add(minScore, c);
+        minScore.setToolTipText(Messages.getString("SemanticSearch.MinScoreTip"));
 
         JButton search = new JButton(Messages.getString("SemanticSearch.Search"));
         JButton external = new JButton(Messages.getString("SemanticSearch.ExternalButton"));

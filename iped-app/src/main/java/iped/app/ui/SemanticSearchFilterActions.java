@@ -29,6 +29,7 @@ import iped.engine.config.EmbeddingTaskConfig;
 import iped.engine.embedding.EmbeddingServiceClient;
 import iped.engine.embedding.EmbeddingServiceClient.Input;
 import iped.engine.embedding.EmbeddingUtil;
+import iped.engine.search.SemanticSearch;
 
 /**
  * Semantic search actions of the analysis UI: by natural language text, by an
@@ -78,6 +79,8 @@ public class SemanticSearchFilterActions {
 
     private static boolean checkAvailable() {
         if (isAvailable()) {
+            // loads the case embeddings while the user types the query
+            SemanticSearch.warmUp(App.get().appCase);
             return true;
         }
         JOptionPane.showMessageDialog(App.get(), Messages.getString("SemanticSearch.NotAvailable"),

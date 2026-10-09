@@ -51,7 +51,7 @@ public class SemanticSearchFilterer implements IResultSetFilterer {
         public IMultiSearchResult filterResult(IMultiSearchResult src)
                 throws ParseException, QueryNodeException, IOException {
             SemanticSearch search = new SemanticSearch(App.get().appCase, queryVector, modalities,
-                    maxResultsPerModality, minScore);
+                    maxResultsPerModality, minScore).setReference(refItemId);
             return search.filter((MultiSearchResult) src);
         }
 
