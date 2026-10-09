@@ -60,6 +60,10 @@ searchMaxResultsPerModality = 500
 # Analysis UI: minimum standout score (0-100) to keep a semantic search result.
 # Raw similarity is not meaningful by itself: unrelated items usually have cosine
 # 0.55-0.65 and that floor changes with the query. The score is how far an item
-# stands out from the typical item of its modality in the case, in robust
-# standard deviations x 10. 30 = 3 deviations; lower it for more recall.
+# stands out from the typical (median) item of its modality in the case, in robust
+# standard deviations x 10. 30 = 3 deviations; lower it for more recall. Note that
+# 0 still keeps only the items above the median of their modality. Because the
+# score is relative to the case, when most items of a modality match the query
+# (e.g. a case made only of car photos, query "car") fewer of them stand out:
+# lower this value or use the maximum results per modality to rank them.
 searchMinScore = 30

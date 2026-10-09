@@ -149,10 +149,11 @@ def decode_video_file(data: bytes, max_frames: int, max_side: int) -> List[Image
         frames = []
         if total > 0:
             wanted = set(np.linspace(0, total - 1, min(max_frames, total)).astype(int).tolist())
+            last_wanted = max(wanted)
             for i, frame in enumerate(container.decode(stream)):
                 if i in wanted:
                     frames.append(frame.to_image())
-                if i >= max(wanted):
+                if i >= last_wanted:
                     break
         else:
             for frame in container.decode(stream):
@@ -376,8 +377,8 @@ def create_app(embedder) -> "FastAPI":
             raise HTTPException(status_code=400, detail="no inputs")
         t = time.time()
         result = embedder.embed(req.inputs)
-        logger.info("embedded %d inputs (%d errors) in %.2fs", len(result["vectors"]), len(result["errors"]),
-                    time.time() - t)
+        logger.info("%d inputs: %d embedded, %d errors, in %.2fs", len(req.inputs), len(result["vectors"]),
+                    len(result["errors"]), time.time() - t)
         return result
 
     return app

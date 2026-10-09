@@ -53,6 +53,7 @@ import iped.data.IItem;
 import iped.engine.CmdLineArgs;
 import iped.engine.config.ConfigurationManager;
 import iped.engine.config.ElasticSearchTaskConfig;
+import iped.engine.config.EmbeddingTaskConfig;
 import iped.engine.config.IndexTaskConfig;
 import iped.engine.embedding.EmbeddingUtil;
 import iped.engine.io.FragmentingReader;
@@ -93,6 +94,7 @@ public class ElasticSearchIndexTask extends AbstractTask {
     private static boolean isEnabled = false;
 
     private ElasticSearchTaskConfig elasticConfig;
+    private ConfigurationManager configurationManager;
 
     private static RestHighLevelClient client;
 
@@ -129,6 +131,7 @@ public class ElasticSearchIndexTask extends AbstractTask {
     public void init(ConfigurationManager configurationManager) throws Exception {
 
         taskInstances.add(this);
+        this.configurationManager = configurationManager;
         elasticConfig = configurationManager.findObject(ElasticSearchTaskConfig.class);
 
         retries = elasticConfig.getRetries();
@@ -291,6 +294,14 @@ public class ElasticSearchIndexTask extends AbstractTask {
                 Map.of("name", "hnsw", "space_type", "l2", "engine", "nmslib")));
         faces_mapping.put("face_location", Collections.singletonMap("type", "short"));
         properties.put("faces", Map.of("type", "nested", "properties", faces_mapping));
+
+        // multimodal item embedding (EmbeddingTask), L2 normalized
+        EmbeddingTaskConfig embeddingConfig = configurationManager.findObject(EmbeddingTaskConfig.class);
+        if (embeddingConfig != null && embeddingConfig.isEnabled()) {
+            properties.put("extraAttributes." + EmbeddingUtil.EMBEDDING,
+                    Map.of("type", "knn_vector", "dimension", embeddingConfig.getDimensions(), "method",
+                            Map.of("name", "hnsw", "space_type", "cosinesimil", "engine", "nmslib")));
+        }
 
         Map<String, String> contentMapping = new HashMap<>(Map.of("type", "text"));
 

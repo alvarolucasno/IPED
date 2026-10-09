@@ -10,6 +10,7 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -100,17 +101,26 @@ public class EmbeddingTask extends AbstractTask {
         final String modality;
         final String cacheKey;
         final Input input;
+        // set if another item with the same content (modality + hash) is already in this batch:
+        // only the primary is sent to the service, duplicates reuse its vector
+        final Pending primary;
 
-        Pending(IItem item, String modality, String cacheKey, Input input) {
+        Pending(IItem item, String modality, String cacheKey, Input input, Pending primary) {
             this.item = item;
             this.modality = modality;
             this.cacheKey = cacheKey;
             this.input = input;
+            this.primary = primary;
+        }
+
+        Input getInput() {
+            return primary != null ? primary.input : input;
         }
     }
 
     // current batch of this worker and items already embedded waiting to be forwarded
     private final LinkedHashMap<String, Pending> pending = new LinkedHashMap<>();
+    private final Map<String, Pending> pendingByCacheKey = new HashMap<>();
     private final LinkedList<IItem> sendToNext = new LinkedList<>();
     private long pendingPayload = 0;
 
@@ -212,6 +222,12 @@ public class EmbeddingTask extends AbstractTask {
                 fromCache.incrementAndGet(m);
                 return;
             }
+            Pending primary = pendingByCacheKey.get(cacheKey);
+            if (primary != null) {
+                // same content already in this batch: hold the item and reuse the vector
+                pending.put(Integer.toString(evidence.getId()), new Pending(evidence, modality, cacheKey, null, primary));
+                return;
+            }
         }
 
         Input input;
@@ -226,7 +242,11 @@ public class EmbeddingTask extends AbstractTask {
         if (input == null) {
             return;
         }
-        pending.put(input.getId(), new Pending(evidence, modality, cacheKey, input));
+        Pending p = new Pending(evidence, modality, cacheKey, input, null);
+        pending.put(input.getId(), p);
+        if (cacheKey != null) {
+            pendingByCacheKey.put(cacheKey, p);
+        }
         pendingPayload += input.getPayloadSize();
     }
 
@@ -236,10 +256,14 @@ public class EmbeddingTask extends AbstractTask {
             return null;
         }
         String mime = mediaType.toString();
-        if (MetadataUtil.isVideoType(mediaType) || MetadataUtil.isAnimationImage(evidence)) {
+        if (MetadataUtil.isVideoType(mediaType)) {
             return embedVideos ? EmbeddingUtil.MODALITY_VIDEO : null;
         }
         if (MetadataUtil.isImageType(mediaType)) {
+            // animated images are embedded from their frames, like videos, when videos are enabled
+            if (embedVideos && MetadataUtil.isAnimationImage(evidence)) {
+                return EmbeddingUtil.MODALITY_VIDEO;
+            }
             return embedImages ? EmbeddingUtil.MODALITY_IMAGE : null;
         }
         if (mime.startsWith("audio/")) {
@@ -375,21 +399,28 @@ public class EmbeddingTask extends AbstractTask {
     private void flush() throws InterruptedException {
         List<Input> inputs = new ArrayList<>(pending.size());
         for (Pending p : pending.values()) {
-            inputs.add(p.input);
+            if (p.primary == null) {
+                inputs.add(p.input);
+            }
         }
         Result result = sendWithRetry(inputs);
         for (Pending p : pending.values()) {
             int m = EmbeddingUtil.modalityIndex(p.modality);
-            float[] vec = result != null ? result.vectors.get(p.input.getId()) : null;
+            String inputId = p.getInput().getId();
+            float[] vec = result != null ? result.vectors.get(inputId) : null;
             if (vec != null && vec.length == config.getDimensions()) {
                 setEmbedding(p.item, p.modality, vec);
-                if (p.cacheKey != null) {
-                    cache.put(p.cacheKey, vec);
+                if (p.primary != null) {
+                    fromCache.incrementAndGet(m);
+                } else {
+                    if (p.cacheKey != null) {
+                        cache.put(p.cacheKey, vec);
+                    }
+                    embedded.incrementAndGet(m);
                 }
-                embedded.incrementAndGet(m);
             } else {
                 String error = result == null ? "service unavailable"
-                        : vec != null ? "unexpected dimension " + vec.length : result.errors.get(p.input.getId());
+                        : vec != null ? "unexpected dimension " + vec.length : result.errors.get(inputId);
                 logger.warn("Failed to embed {} {}: {}", p.modality, p.item.getPath(), error);
                 p.item.setExtraAttribute(EmbeddingUtil.EMBEDDING_STATUS, STATUS_ERROR);
                 failed.incrementAndGet(m);
@@ -397,6 +428,7 @@ public class EmbeddingTask extends AbstractTask {
             sendToNext.add(p.item);
         }
         pending.clear();
+        pendingByCacheKey.clear();
         pendingPayload = 0;
     }
 
@@ -465,8 +497,20 @@ public class EmbeddingTask extends AbstractTask {
                 }
                 initialized = false;
                 statsLogged.set(false);
+                resetStatistics();
             }
         }
+    }
+
+    private static void resetStatistics() {
+        for (int i = 0; i < EmbeddingUtil.MODALITIES.length; i++) {
+            embedded.set(i, 0);
+            failed.set(i, 0);
+            fromCache.set(i, 0);
+        }
+        skipped.set(0);
+        requestTime.set(0);
+        requests.set(0);
     }
 
     private static void logStatistics() {

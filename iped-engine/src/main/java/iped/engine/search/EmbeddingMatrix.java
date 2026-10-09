@@ -74,11 +74,32 @@ public class EmbeddingMatrix {
     private final WeakReference<IndexReader> reader;
     private final int[] leafSlotStart;
 
-    private final Map<String, float[]> scoreCache = new LinkedHashMap<String, float[]>(8, 0.75f, true) {
+    /** Query vector as a map key (float[] has identity equals/hashCode). */
+    private static final class QueryKey {
+        private final float[] values;
+        private final int hash;
+
+        QueryKey(float[] query) {
+            this.values = query.clone();
+            this.hash = Arrays.hashCode(values);
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof QueryKey && Arrays.equals(values, ((QueryKey) o).values);
+        }
+    }
+
+    private final Map<QueryKey, float[]> scoreCache = new LinkedHashMap<QueryKey, float[]>(8, 0.75f, true) {
         private static final long serialVersionUID = 1L;
 
         @Override
-        protected boolean removeEldestEntry(Map.Entry<String, float[]> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<QueryKey, float[]> eldest) {
             return size() > SCORE_CACHE_SIZE;
         }
     };
@@ -269,7 +290,7 @@ public class EmbeddingMatrix {
             throw new IllegalArgumentException("Query embedding has " + query.length + " dimensions but the case has "
                     + dim + ". Check the embedding service '--dim' option.");
         }
-        String key = Arrays.toString(query);
+        QueryKey key = new QueryKey(query);
         synchronized (scoreCache) {
             float[] cached = scoreCache.get(key);
             if (cached != null) {
