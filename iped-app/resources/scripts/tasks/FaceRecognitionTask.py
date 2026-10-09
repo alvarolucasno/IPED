@@ -1,5 +1,7 @@
 ﻿'''
-# Python face recognition feature based on Face Recognition Project (https://pypi.org/project/face-recognition/)
+# Python face recognition feature. Models (see FaceRecognitionConfig.txt):
+#  - buffalo_l: InsightFace SCRFD detector + ArcFace ResNet-50 (512-d) with onnxruntime (default)
+#  - dlib: Face Recognition Project (https://pypi.org/project/face-recognition/), 128-d
 # FaceRecognitionTask.py - By Rui Sant'Ana Junior and Luis Nassif
 # Requirements: See https://github.com/sepinf-inc/IPED/wiki/User-Manual#facerecognition
 # If enabled, you can search for faces from the analysis interface, check the options menu.
@@ -20,6 +22,11 @@ maxResolutionProp = 'maxResolution'
 faceDetectionModelProp = 'faceDetectionModel'
 upSamplingProp = 'upSampling'
 minSizeProp = 'minSize'
+faceRecognitionModelProp = 'faceRecognitionModel'
+faceModelDirProp = 'faceModelDir'
+faceRecognitionDeviceProp = 'faceRecognitionDevice'
+faceDetectionThresholdProp = 'faceDetectionThreshold'
+minFaceSizeProp = 'minFaceSize'
 
 # External process script
 processScript = 'FaceRecognitionProcess.py'
@@ -38,6 +45,14 @@ detection_model = 'hog'
 max_size = 1024
 up_sampling = 1
 min_size = 48
+recognition_model = 'buffalo_l'
+model_dir = ''
+device = 'auto'
+det_threshold = 0.5
+min_face_size = 0
+
+# processes sharing one GPU: each loads its own copy of the models
+defaultGpuProcesses = 2
 
 firstInstance = True
 processQueue = None
@@ -52,8 +67,29 @@ def createProcessQueue():
     global processQueue, maxProcesses
     if processQueue is None:
         if maxProcesses is None:
-            maxProcesses = int(max(1, numThreads / 2))
+            if recognition_model != 'dlib' and device != 'cpu':
+                maxProcesses = defaultGpuProcesses
+            else:
+                maxProcesses = int(max(1, numThreads / 2))
         processQueue = queue.Queue(maxProcesses)
+
+def cpuThreadsPerProcess():
+    # avoids oversubscription when onnxruntime runs on CPU in many processes
+    if recognition_model == 'dlib' or maxProcesses is None:
+        return 0
+    return int(max(1, (os.cpu_count() or 1) / maxProcesses))
+
+# InsightFace model folder: configured, inside IPED models folder or InsightFace default cache
+def findModelDir(configured):
+    candidates = []
+    if configured:
+        candidates.append(configured if os.path.isabs(configured) else os.path.join(ipedRoot, configured))
+    candidates.append(os.path.join(ipedRoot, 'models', 'insightface', recognition_model))
+    candidates.append(os.path.join(os.path.expanduser('~'), '.insightface', 'models', recognition_model))
+    for c in candidates:
+        if os.path.isfile(os.path.join(c, 'det_10g.onnx')) and os.path.isfile(os.path.join(c, 'w600k_r50.onnx')):
+            return c
+    return None
 
 def log_stderr(proc):
     for line in iter(proc.stderr.readline, b''):
@@ -69,8 +105,9 @@ def createExternalProcess():
     proc = None
     for i in range(3):
         if proc is None or proc.poll() is not None:
-            proc = subprocess.Popen([bin, os.path.join(ipedRoot, 'scripts', 'tasks', processScript), str(max_size), detection_model, str(up_sampling)], 
-                                    stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            args = [bin, os.path.join(ipedRoot, 'scripts', 'tasks', processScript), str(max_size), detection_model, str(up_sampling),
+                    recognition_model, model_dir, device, str(det_threshold), str(cpuThreadsPerProcess()), str(min_face_size)]
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         
         if pingExternalProcess(proc):
             from threading import Thread
@@ -124,13 +161,28 @@ class FaceRecognitionTask:
             msg_see_manual = 'See FaceRecognition task setup information at <https://github.com/sepinf-inc/IPED/wiki/User-Manual#facerecognition>.'
             msg_task_init_error = 'FaceRecognition task could not be initialized and was disabled'
 
-            # chek if 'face_recognition' module is installed
-            module_name = 'face_recognition'
-            import face_recognition
+            global recognition_model
+            model = taskConfig.getConfiguration().getProperty(faceRecognitionModelProp)
+            if model is not None and model.strip():
+                recognition_model = model.strip().lower()
 
-            # chek if 'opencv-python' module is installed
-            module_name = 'opencv-python'
-            import cv2
+            if recognition_model == 'dlib':
+                # chek if 'face_recognition' module is installed
+                module_name = 'face_recognition'
+                import face_recognition
+
+                # chek if 'opencv-python' module is installed
+                module_name = 'opencv-python'
+                import cv2
+            elif recognition_model == 'buffalo_l':
+                module_name = 'onnxruntime (or onnxruntime-gpu)'
+                import onnxruntime
+                module_name = 'pillow'
+                import PIL
+            else:
+                logger.error(msg_task_init_error + f': unknown faceRecognitionModel \'{recognition_model}\' (use buffalo_l or dlib).')
+                FaceRecognitionTask.enabled = False
+                return
 
             # chek if 'numpy' module is installed
             module_name = 'numpy'
@@ -196,7 +248,30 @@ class FaceRecognitionTask:
         minSize = extraProps.getProperty(minSizeProp)
         if minSize is not None:
             min_size = int(minSize)
-        
+
+        global model_dir, device, det_threshold, min_face_size
+        value = extraProps.getProperty(faceRecognitionDeviceProp)
+        if value is not None and value.strip():
+            device = value.strip().lower()
+        value = extraProps.getProperty(faceDetectionThresholdProp)
+        if value is not None and value.strip():
+            det_threshold = float(value)
+        value = extraProps.getProperty(minFaceSizeProp)
+        if value is not None and value.strip():
+            min_face_size = int(value)
+        if recognition_model != 'dlib':
+            configured = extraProps.getProperty(faceModelDirProp)
+            found = findModelDir(configured.strip() if configured is not None else None)
+            if found is None:
+                logger.error('FaceRecognition task could not be initialized and was disabled: InsightFace ' + recognition_model
+                             + ' model files (det_10g.onnx, w600k_r50.onnx) not found in faceModelDir, '
+                             + os.path.join(ipedRoot, 'models', 'insightface', recognition_model) + ' or ~/.insightface/models/'
+                             + recognition_model + '. See conf/FaceRecognitionConfig.txt.')
+                FaceRecognitionTask.enabled = False
+                return
+            model_dir = found
+            logger.info('[FaceRecognitionTask] Using InsightFace ' + recognition_model + ' models from ' + model_dir)
+
         createProcessQueue()
         return
             
@@ -358,14 +433,11 @@ class FaceRecognitionTask:
                 line = proc.stdout.readline()
                 face_locations.append(eval(line))
             
+            # one line per face: 128 (dlib) or 512 (buffalo_l) space separated values
             face_encodings = []
             for i in range(num_faces):
-                encodings_list = []
-                for j in range(128):
-                    line = proc.stdout.readline()
-                    encodings_list.append(float(line))
-                np_array = np.array(encodings_list)
-                face_encodings.append(np_array)
+                line = proc.stdout.readline()
+                face_encodings.append(np.array([float(v) for v in line.split()]))
             
             t3 = time.time()
             with timeLock:

@@ -59,7 +59,9 @@ public class SimilarFacesFilterActions {
 
     private static ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    private static int minScore = 50;
+    // last minimum score chosen for each metric (dlib distance or ArcFace cosine scores are not comparable)
+    private static int minScoreDlib = SimilarFacesSearch.DEFAULT_MIN_SCORE_DLIB;
+    private static int minScoreCosine = SimilarFacesSearch.DEFAULT_MIN_SCORE_COSINE;
     private static int mode = 0;
 
     public static void clear() {
@@ -167,10 +169,18 @@ public class SimilarFacesFilterActions {
         }
 
         if (newSimilarFacesRefItem != null) {
+            boolean cosine = SimilarFacesSearch.isCosineModel(newSimilarFacesRefItem);
+            int minScore = cosine ? minScoreCosine : minScoreDlib;
             SimilarFacesOptionsDialog opt = new SimilarFacesOptionsDialog(app, newSimilarFacesRefItem, minScore, mode);
             opt.setVisible(true);
             if (opt.isOk()) {
-                SimilarFacesSearch.setMinScore(minScore = opt.getMinScore());
+                minScore = opt.getMinScore();
+                if (cosine) {
+                    minScoreCosine = minScore;
+                } else {
+                    minScoreDlib = minScore;
+                }
+                SimilarFacesSearch.setMinScore(minScore);
                 SimilarFacesSearch.setMode(mode = opt.getMode());
                 SimilarFacesSearch.setSelectedIdxs(opt.getSelectedIdxs());
             } else {

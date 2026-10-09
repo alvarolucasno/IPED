@@ -1,24 +1,54 @@
-# Face recognition feature based on Face Recognition Project (https://pypi.org/project/face-recognition/)
+# Face recognition: detects faces in images and video thumbnails and stores one embedding per face,
+# allowing similar faces search from the analysis interface (check the options menu).
 # You must install python and some dependencies, see: See https://github.com/sepinf-inc/IPED/wiki/User-Manual#facerecognition
-# If enabled, you can search for faces from the analysis interface, check the options menu.
 
-# Number of external face recognition processes. If not set, the number of CPU logical cores will be used.
+# Recognition model. Possible values:
+#  - buffalo_l: InsightFace SCRFD-10GF detector + ArcFace ResNet-50 trained on WebFace600K, 512-d embeddings
+#    compared by cosine similarity. Much more accurate than dlib, specially with pose, low resolution and
+#    non-white faces. Runs with onnxruntime-gpu (CUDA) or onnxruntime (CPU) in IPED python:
+#      python -m pip install "numpy<2" pillow onnxruntime-gpu nvidia-cuda-runtime-cu12 nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-curand-cu12
+#    Model files det_10g.onnx and w600k_r50.onnx come from
+#      https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip
+#    LICENSE: InsightFace pretrained models are available for non-commercial research purposes only.
+#    Check if your use complies or obtain a commercial license from InsightFace.
+#  - dlib: Face Recognition Project (https://pypi.org/project/face-recognition/), 128-d embeddings compared by
+#    euclidean distance. Needs face_recognition and opencv-python modules.
+# Cases processed with one model can only be searched with faces of the same model.
+faceRecognitionModel = buffalo_l
+
+# Folder with buffalo_l model files (absolute or relative to IPED folder). If not set, they are looked for in
+# models/insightface/buffalo_l (IPED folder) and in ~/.insightface/models/buffalo_l (InsightFace default cache).
+#faceModelDir = models/insightface/buffalo_l
+
+# buffalo_l: 'auto' uses CUDA (or DirectML) if available, otherwise CPU; 'cpu' forces CPU.
+faceRecognitionDevice = auto
+
+# buffalo_l: minimum face detection confidence (0-1). Lower finds more faces but also more false detections.
+faceDetectionThreshold = 0.5
+
+# buffalo_l: ignore detected faces smaller than this (pixels, smallest side in the original image). 0 = keep all.
+# Tiny faces give unreliable embeddings and may cause false matches.
+minFaceSize = 0
+
+# Number of external face recognition processes. If not set: 2 for buffalo_l on GPU (each process loads its
+# own copy of the models, ~1GB of GPU memory), otherwise half of the CPU logical cores.
 # You can set this if you have memory usage problems, e.g. if you are using a GPU with very few memory.
 #numFaceRecognitionProcesses = 4
 
 # Max width or height used to resize images before face detection. This dramatically reduces
 # the time of face detection on high resolution images, although small faces are lost.
 # This could be increased, but processing time will take much longer.
+# With buffalo_l, embeddings are always computed from the full resolution image.
 maxResolution = 1024
 
-# Face detection algorithm. Possible values: 'hog' or 'cnn'.
+# dlib only: face detection algorithm. Possible values: 'hog' or 'cnn'.
 # The last is more accurate, but is much more slower. It should be used just with a good GPU.
 faceDetectionModel = hog
 
-# Number of times the image will be upsampled before recognition. Default is 1x (doubles the image size).
+# dlib only: number of times the image will be upsampled before recognition. Default is 1x (doubles the image size).
 # This improves detection of small faces. But is limited by maxResolution setting.
 upSampling = 1
 
-# Minimum size (in pixels) to apply face recognition to an image. 
-# Images with either dimension (height or width) smaller than this threshold are ignored by this task.   
+# Minimum size (in pixels) to apply face recognition to an image.
+# Images with either dimension (height or width) smaller than this threshold are ignored by this task.
 minSize = 48
